@@ -8,9 +8,24 @@ const { Engine, Render, Runner, World, Bodies, Body, Constraint, Mouse, MouseCon
 const engine = Engine.create();
 const world = engine.world;
 
+// Disable gravity - we want zero-gravity so the ragdoll only moves by dragging
+world.gravity.x = 0;
+world.gravity.y = 0;
+world.gravity.scale = 0;
+
+// Ensure canvas exists (GitHub Pages or other hosts may rewrite paths)
+let canvas = document.getElementById("world");
+if (!canvas) {
+  console.warn("Canvas #world not found in DOM — creating a fallback canvas inside #container.");
+  const container = document.getElementById("container") || document.body;
+  canvas = document.createElement("canvas");
+  canvas.id = "world";
+  container.appendChild(canvas);
+}
+
 // Create renderer
 const render = Matter.Render.create({
-  canvas: document.getElementById("world"),
+  canvas: canvas,
   engine: engine,
   options: {
     width: window.innerWidth,
@@ -20,9 +35,23 @@ const render = Matter.Render.create({
   }
 });
 
-Render.run(render);
-const runner = Runner.create();
-Runner.run(runner, engine);
+// Make sure canvas has initial size (some hosts give 0x0 until styled)
+render.canvas.width = window.innerWidth;
+render.canvas.height = window.innerHeight;
+
+// Sanity checks and guarded start
+if (typeof Matter === 'undefined') {
+  console.error('Matter.js is not available. Check that the CDN script loaded successfully.');
+} else {
+  try {
+    console.log('Starting renderer with canvas:', render.canvas, 'size:', render.canvas.width + 'x' + render.canvas.height);
+    Render.run(render);
+    const runner = Runner.create();
+    Runner.run(runner, engine);
+  } catch (err) {
+    console.error('Failed to start Matter renderer/runner:', err);
+  }
+}
 
 // =========
 // RAGDOLL BUILD
