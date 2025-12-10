@@ -19,6 +19,7 @@ const render = Matter.Render.create({
   }
 });
 
+console.log("✅ Paper Doll script loaded successfully — latest version is running");
 
 Render.run(render);
 const runner = Runner.create();
