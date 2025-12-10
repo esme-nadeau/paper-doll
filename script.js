@@ -1,6 +1,7 @@
 // =========
 // Matter.js Setup
 // =========
+console.log("✅ Paper Doll script loaded successfully — latest version is running");
 
 const { Engine, Render, Runner, World, Bodies, Body, Constraint, Mouse, MouseConstraint } = Matter;
 
@@ -18,8 +19,6 @@ const render = Matter.Render.create({
     background: "#ffffff"
   }
 });
-
-console.log("✅ Paper Doll script loaded successfully — latest version is running");
 
 Render.run(render);
 const runner = Runner.create();
