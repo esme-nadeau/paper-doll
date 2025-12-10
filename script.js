@@ -8,8 +8,7 @@ const engine = Engine.create();
 const world = engine.world;
 
 // Create renderer
-const render = Render.create({
-  element: document.body,
+const render = Matter.Render.create({
   canvas: document.getElementById("world"),
   engine: engine,
   options: {
@@ -19,6 +18,7 @@ const render = Render.create({
     background: "#ffffff"
   }
 });
+
 
 Render.run(render);
 const runner = Runner.create();
