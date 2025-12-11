@@ -253,32 +253,41 @@ const mouseConstraint = MouseConstraint.create(engine, {
 World.add(world, mouseConstraint);
 render.mouse = mouse;
 
-// Disable gravity once the user first touches/drags a body
-let gravityDisabledOnTouch = false;
-if (Matter && Matter.Events && mouseConstraint) {
-  Matter.Events.on(mouseConstraint, 'startdrag', () => {
-    if (!gravityDisabledOnTouch) {
-      world.gravity.x = 0;
-      world.gravity.y = 0;
-      world.gravity.scale = 0;
-      gravityDisabledOnTouch = true;
-      console.log('Gravity disabled after first touch.');
-    }
-  });
-}
+// Replace previous "disable gravity on first click" behavior with disabling gravity when ragdoll lands
+let gravityDisabledOnGround = false;
 
-// Listen for collisions and enable full screen bounds once the ragdoll touches the bottom
 if (Matter && Matter.Events) {
   Matter.Events.on(engine, 'collisionStart', (event) => {
-    if (boundsActivated) return; // already active
+    // if we've already activated full bounds AND disabled gravity, nothing to do
+    if (boundsActivated && gravityDisabledOnGround) return;
 
     for (let pair of event.pairs) {
-      // if one of the bodies is the bottom bound and the other is a dynamic body (the ragdoll)
+      // detect collision with the bottom bound
       if (pair.bodyA === bounds.bottom || pair.bodyB === bounds.bottom) {
         const other = (pair.bodyA === bounds.bottom) ? pair.bodyB : pair.bodyA;
         if (!other.isStatic) {
           console.log('Bottom collision detected — activating full screen bounds.');
-          // recreate bounds with full set (top/left/right + bottom)
+
+          // disable gravity once when the ragdoll hits the bottom
+          if (!gravityDisabledOnGround) {
+            world.gravity.x = 0;
+            world.gravity.y = 0;
+            world.gravity.scale = 0;
+            gravityDisabledOnGround = true;
+            console.log('Gravity disabled after landing on bottom.');
+
+            // zero out velocities so bodies settle instead of briefly penetrating or sliding
+            try {
+              (world.bodies || []).forEach(b => {
+                if (!b.isStatic) {
+                  Body.setVelocity(b, { x: 0, y: 0 });
+                  Body.setAngularVelocity(b, 0);
+                }
+              });
+            } catch (e) { /* ignore */ }
+          }
+
+          // enable full-screen bounds (top/left/right + bottom)
           createBounds(true);
           break;
         }
