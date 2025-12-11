@@ -203,15 +203,15 @@ World.add(world, [
     stiffness: 0.6
   }),
   connect(upperArmLeft, lowerArmLeft, {
-    pointA: { x: TORSO_W / 2 - 5, y: -30 },
-    pointB: { x: 0, y: -LIMB_H / 2 + 10 },
+    pointA: { x: 0, y: LIMB_H / 2 },
+    pointB: { x: 0, y: -LIMB_H / 2 },
     stiffness: 0.6
   }),
 
   // Right arm joints
   connect(torso, upperArmRight, {
-    pointA: { x: TORSO_W / 2, y: -TORSO_H / 4 },
-    pointB: { x: 0, y: -LIMB_H / 2 },
+    pointA: { x: TORSO_W / 2 - 5, y: -30 },
+    pointB: { x: 0, y: -LIMB_H / 2 + 10 },
     stiffness: 0.6
   }),
   connect(upperArmRight, lowerArmRight, {
