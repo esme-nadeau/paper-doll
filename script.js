@@ -70,24 +70,38 @@ let bounds = {
   right: null
 };
 
-function createBounds() {
+// Flag: whether full screen bounds (top/left/right) are active. We always create the bottom initially
+let boundsActivated = false;
+
+function createBounds(full = false) {
   const w = render.canvas.width;
   const h = render.canvas.height;
   const thickness = 100; // large enough to catch fast drags
 
   // Remove existing bounds if present
-  Object.values(bounds).forEach(b => { if (b) World.remove(world, b); });
+  Object.values(bounds).forEach(b => { if (b) {
+    try { World.remove(world, b); } catch (e) { /* ignore */ }
+  }});
 
-  bounds.top = Bodies.rectangle(w / 2, -thickness / 2, w + thickness * 2, thickness, { isStatic: true, render: { visible: false } });
+  bounds = { top: null, bottom: null, left: null, right: null };
+
+  // Always create a bottom so the ragdoll can land
   bounds.bottom = Bodies.rectangle(w / 2, h + thickness / 2, w + thickness * 2, thickness, { isStatic: true, render: { visible: false } });
-  bounds.left = Bodies.rectangle(-thickness / 2, h / 2, thickness, h + thickness * 2, { isStatic: true, render: { visible: false } });
-  bounds.right = Bodies.rectangle(w + thickness / 2, h / 2, thickness, h + thickness * 2, { isStatic: true, render: { visible: false } });
 
-  World.add(world, [bounds.top, bounds.bottom, bounds.left, bounds.right]);
+  if (full) {
+    bounds.top = Bodies.rectangle(w / 2, -thickness / 2, w + thickness * 2, thickness, { isStatic: true, render: { visible: false } });
+    bounds.left = Bodies.rectangle(-thickness / 2, h / 2, thickness, h + thickness * 2, { isStatic: true, render: { visible: false } });
+    bounds.right = Bodies.rectangle(w + thickness / 2, h / 2, thickness, h + thickness * 2, { isStatic: true, render: { visible: false } });
+    World.add(world, [bounds.top, bounds.bottom, bounds.left, bounds.right]);
+    boundsActivated = true;
+  } else {
+    World.add(world, [bounds.bottom]);
+    boundsActivated = false;
+  }
 }
 
-// Create initial bounds
-createBounds();
+// Create initial bounds (bottom only so doll can fall through top until it hits the floor)
+createBounds(false);
 
 // =========
 // RAGDOLL BUILD
@@ -253,13 +267,33 @@ if (Matter && Matter.Events && mouseConstraint) {
   });
 }
 
+// Listen for collisions and enable full screen bounds once the ragdoll touches the bottom
+if (Matter && Matter.Events) {
+  Matter.Events.on(engine, 'collisionStart', (event) => {
+    if (boundsActivated) return; // already active
+
+    for (let pair of event.pairs) {
+      // if one of the bodies is the bottom bound and the other is a dynamic body (the ragdoll)
+      if (pair.bodyA === bounds.bottom || pair.bodyB === bounds.bottom) {
+        const other = (pair.bodyA === bounds.bottom) ? pair.bodyB : pair.bodyA;
+        if (!other.isStatic) {
+          console.log('Bottom collision detected — activating full screen bounds.');
+          // recreate bounds with full set (top/left/right + bottom)
+          createBounds(true);
+          break;
+        }
+      }
+    }
+  });
+}
+
 // Keep canvas full screen
 window.addEventListener("resize", () => {
   render.canvas.width = window.innerWidth;
   render.canvas.height = window.innerHeight;
-  // recreate bounds to match new canvas size
+  // recreate only the same set of bounds that are currently active
   try {
-    createBounds();
+    createBounds(boundsActivated);
   } catch (err) {
     console.warn('Failed to recreate bounds on resize:', err);
   }
