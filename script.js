@@ -198,9 +198,10 @@ function connect(a, b, options = {}) {
 World.add(world, [
   // Left arm joints
   connect(torso, upperArmLeft, {
-    pointA: { x: -TORSO_W / 2, y: -TORSO_H / 4 },
-    pointB: { x: 0, y: -LIMB_H / 2 },
-    stiffness: 0.6
+    pointA: { x: -TORSO_W / 2 + 10, y: -20 },   // move slightly inward
+    pointB: { x: 0, y: -LIMB_H / 3 },           // move joint closer to limb center
+    stiffness: 0.6,
+    render: { strokeStyle: "#000", lineWidth: 3 }  // OPTIONAL visible circle joint
   }),
   connect(upperArmLeft, lowerArmLeft, {
     pointA: { x: 0, y: LIMB_H / 2 },
