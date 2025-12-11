@@ -9,9 +9,14 @@ const engine = Engine.create();
 const world = engine.world;
 
 // Disable gravity - we want zero-gravity so the ragdoll only moves by dragging
+// world.gravity.x = 0;
+// world.gravity.y = 0;
+// world.gravity.scale = 0;
+
+// Start with normal gravity so the ragdoll falls to the floor
 world.gravity.x = 0;
-world.gravity.y = 0;
-world.gravity.scale = 0;
+world.gravity.y = 1;
+world.gravity.scale = 0.001;
 
 // Ensure canvas exists (GitHub Pages or other hosts may rewrite paths)
 let canvas = document.getElementById("world");
@@ -107,8 +112,12 @@ const TORSO_W = 80, TORSO_H = 120;
 const LIMB_W = 20, LIMB_H = 60;
 
 // Position
-const centerX = window.innerWidth / 2;
-const centerY = window.innerHeight / 2;
+// const centerX = window.innerWidth / 2;
+// const centerY = window.innerHeight / 2;
+
+// Use renderer canvas size so the doll starts exactly centered in the view
+const centerX = Math.round(render.canvas.width / 2);
+const centerY = Math.round(render.canvas.height / 2);
 
 // Body parts
 const head = createLimb(centerX, centerY - 150, HEAD_SIZE, HEAD_SIZE, {
@@ -229,6 +238,20 @@ const mouseConstraint = MouseConstraint.create(engine, {
 
 World.add(world, mouseConstraint);
 render.mouse = mouse;
+
+// Disable gravity once the user first touches/drags a body
+let gravityDisabledOnTouch = false;
+if (Matter && Matter.Events && mouseConstraint) {
+  Matter.Events.on(mouseConstraint, 'startdrag', () => {
+    if (!gravityDisabledOnTouch) {
+      world.gravity.x = 0;
+      world.gravity.y = 0;
+      world.gravity.scale = 0;
+      gravityDisabledOnTouch = true;
+      console.log('Gravity disabled after first touch.');
+    }
+  });
+}
 
 // Keep canvas full screen
 window.addEventListener("resize", () => {
