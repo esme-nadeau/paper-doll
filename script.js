@@ -207,7 +207,7 @@ World.add(world, [
     pointB: { x: 0, y: -LIMB_H / 2 },
     stiffness: 0.6
   }),
-
+ 
   // Right arm joints
   connect(torso, upperArmRight, {
     pointA: { x: TORSO_W / 2 - 5, y: -30 },
