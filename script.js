@@ -107,9 +107,12 @@ createBounds(false);
 // RAGDOLL BUILD
 // =========
 
+// Utility: collect ragdoll parts so we can enforce bounds on them
+const ragdollParts = [];
+
 // Utility function
 function createLimb(x, y, w, h, options = {}) {
-  return Bodies.rectangle(x, y, w, h, {
+  const body = Bodies.rectangle(x, y, w, h, {
     chamfer: { radius: 10 },
     render: {
       fillStyle: "#d9b38c",
@@ -117,6 +120,11 @@ function createLimb(x, y, w, h, options = {}) {
     },
     ...options
   });
+
+  // mark and track as part of the ragdoll
+  body.isRagdollPart = true;
+  ragdollParts.push(body);
+  return body;
 }
 
 // Body part sizes
@@ -256,6 +264,7 @@ render.mouse = mouse;
 // Replace previous "disable gravity on first click" behavior with disabling gravity when ragdoll lands
 let gravityDisabledOnGround = false;
 
+// Listen for collisions and enable full screen bounds once the ragdoll touches the bottom
 if (Matter && Matter.Events) {
   Matter.Events.on(engine, 'collisionStart', (event) => {
     // if we've already activated full bounds AND disabled gravity, nothing to do
@@ -295,6 +304,71 @@ if (Matter && Matter.Events) {
     }
   });
 }
+
+// =========
+// GENTLE REPOSITIONING (keep ragdoll parts inside screen)
+// =========
+
+// Apply a gentle restoring force when any ragdoll part is detected outside the visible canvas.
+// Only active once full bounds are turned on (so the doll can fall through the top initially).
+const RESTORE_FORCE_BASE = 0.0002; // tweak for strength of nudge
+const RESTORE_VELOCITY_DAMP = 0.6;  // damp velocity when nudging to avoid oscillation
+const EDGE_MARGIN = 6; // pixels inside the visible edge where we try to keep parts
+
+Matter.Events.on(engine, 'beforeUpdate', () => {
+  if (!boundsActivated) return; // do nothing until full-screen bounds are active
+
+  const w = render.canvas.width;
+  const h = render.canvas.height;
+
+  for (const b of ragdollParts) {
+    if (!b || b.isStatic) continue;
+
+    let force = { x: 0, y: 0 };
+    let outside = false;
+
+    // left
+    if (b.position.x < EDGE_MARGIN) {
+      outside = true;
+      const dx = EDGE_MARGIN - b.position.x;
+      force.x += RESTORE_FORCE_BASE * dx;
+    }
+
+    // right
+    if (b.position.x > w - EDGE_MARGIN) {
+      outside = true;
+      const dx = (w - EDGE_MARGIN) - b.position.x;
+      force.x += RESTORE_FORCE_BASE * dx;
+    }
+
+    // top
+    if (b.position.y < EDGE_MARGIN) {
+      outside = true;
+      const dy = EDGE_MARGIN - b.position.y;
+      force.y += RESTORE_FORCE_BASE * dy;
+    }
+
+    // bottom
+    if (b.position.y > h - EDGE_MARGIN) {
+      outside = true;
+      const dy = (h - EDGE_MARGIN) - b.position.y;
+      force.y += RESTORE_FORCE_BASE * dy;
+    }
+
+    if (outside) {
+      try {
+        // scale by mass so bigger bodies get proportional force
+        const mass = (b.mass || 1);
+        Body.applyForce(b, b.position, { x: force.x * mass, y: force.y * mass });
+
+        // gently reduce velocity to avoid ping-pong
+        Body.setVelocity(b, { x: b.velocity.x * RESTORE_VELOCITY_DAMP, y: b.velocity.y * RESTORE_VELOCITY_DAMP });
+      } catch (e) {
+        // ignore occasional race conditions
+      }
+    }
+  }
+});
 
 // Keep canvas full screen
 window.addEventListener("resize", () => {
