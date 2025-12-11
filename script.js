@@ -54,6 +54,37 @@ if (typeof Matter === 'undefined') {
 }
 
 // =========
+// SCREEN BOUNDARIES
+// =========
+
+// Create four static boundary bodies slightly outside the visible area so bodies cannot be dragged off-screen
+let bounds = {
+  top: null,
+  bottom: null,
+  left: null,
+  right: null
+};
+
+function createBounds() {
+  const w = render.canvas.width;
+  const h = render.canvas.height;
+  const thickness = 100; // large enough to catch fast drags
+
+  // Remove existing bounds if present
+  Object.values(bounds).forEach(b => { if (b) World.remove(world, b); });
+
+  bounds.top = Bodies.rectangle(w / 2, -thickness / 2, w + thickness * 2, thickness, { isStatic: true, render: { visible: false } });
+  bounds.bottom = Bodies.rectangle(w / 2, h + thickness / 2, w + thickness * 2, thickness, { isStatic: true, render: { visible: false } });
+  bounds.left = Bodies.rectangle(-thickness / 2, h / 2, thickness, h + thickness * 2, { isStatic: true, render: { visible: false } });
+  bounds.right = Bodies.rectangle(w + thickness / 2, h / 2, thickness, h + thickness * 2, { isStatic: true, render: { visible: false } });
+
+  World.add(world, [bounds.top, bounds.bottom, bounds.left, bounds.right]);
+}
+
+// Create initial bounds
+createBounds();
+
+// =========
 // RAGDOLL BUILD
 // =========
 
@@ -203,4 +234,10 @@ render.mouse = mouse;
 window.addEventListener("resize", () => {
   render.canvas.width = window.innerWidth;
   render.canvas.height = window.innerHeight;
+  // recreate bounds to match new canvas size
+  try {
+    createBounds();
+  } catch (err) {
+    console.warn('Failed to recreate bounds on resize:', err);
+  }
 });
