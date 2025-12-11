@@ -115,6 +115,7 @@ function createLimb(x, y, w, h, options = {}) {
   const body = Bodies.rectangle(x, y, w, h, {
     chamfer: { radius: 10 },
     render: {
+      // If a sprite is provided in options.render, keep it. Otherwise fallback to a flat color until images load.
       fillStyle: "#d9b38c",
       ...options.render
     },
@@ -143,19 +144,21 @@ const centerY = Math.round(render.canvas.height / 2);
 
 // Body parts
 const head = createLimb(centerX, centerY - 150, HEAD_SIZE, HEAD_SIZE, {
-  render: { fillStyle: "#f5d7b6" }
+  render: { fillStyle: "#f5d7b6", sprite: {} }
 });
 
 const torso = createLimb(centerX, centerY - 60, TORSO_W, TORSO_H, {
-  render: { fillStyle: "#e0a96d" }
+  render: { fillStyle: "#e0a96d", sprite: {} }
 });
 
 // Arms
-const upperArmLeft = createLimb(centerX - 60, centerY - 80, LIMB_W, LIMB_H);
-const lowerArmLeft = createLimb(centerX - 60, centerY - 20, LIMB_W, LIMB_H);
+// Position upper arms closer to the torso horizontal anchor to avoid a large gap
+const ARM_OFFSET_X = 20; // match the torso->leg anchor magnitude
+const upperArmLeft = createLimb(centerX - ARM_OFFSET_X, centerY - 80, LIMB_W, LIMB_H);
+const lowerArmLeft = createLimb(centerX - ARM_OFFSET_X, centerY - 20, LIMB_W, LIMB_H);
 
-const upperArmRight = createLimb(centerX + 60, centerY - 80, LIMB_W, LIMB_H);
-const lowerArmRight = createLimb(centerX + 60, centerY - 20, LIMB_W, LIMB_H);
+const upperArmRight = createLimb(centerX + ARM_OFFSET_X, centerY - 80, LIMB_W, LIMB_H);
+const lowerArmRight = createLimb(centerX + ARM_OFFSET_X, centerY - 20, LIMB_W, LIMB_H);
 
 // Legs
 const upperLegLeft = createLimb(centerX - 20, centerY + 40, LIMB_W, LIMB_H);
@@ -163,6 +166,98 @@ const lowerLegLeft = createLimb(centerX - 20, centerY + 100, LIMB_W, LIMB_H);
 
 const upperLegRight = createLimb(centerX + 20, centerY + 40, LIMB_W, LIMB_H);
 const lowerLegRight = createLimb(centerX + 20, centerY + 100, LIMB_W, LIMB_H);
+
+// =========
+// IMAGE LOADING: replace rectangle fills with textured sprites from /img
+// =========
+
+// Preload images and assign to body.render.sprite.texture
+const assets = {
+  head: 'img/head.png',
+  torso: 'img/torso.png',
+  upperArm: 'img/upper_arms.png',
+  lowerArm: 'img/lower_arms.png',
+  upperLeg: 'img/upper_legs.png',
+  lowerLeg: 'img/lower_legs.png'
+};
+
+function loadImage(path) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = path;
+  });
+}
+
+// map body objects to asset keys so we can set textures and scales
+const bodyAssetMap = new Map([
+  [head, 'head'],
+  [torso, 'torso'],
+  [upperArmLeft, 'upperArm'],
+  [lowerArmLeft, 'lowerArm'],
+  [upperArmRight, 'upperArm'],
+  [lowerArmRight, 'lowerArm'],
+  [upperLegLeft, 'upperLeg'],
+  [lowerLegLeft, 'lowerLeg'],
+  [upperLegRight, 'upperLeg'],
+  [lowerLegRight, 'lowerLeg']
+]);
+
+// load all images then apply as sprite textures
+Promise.all(Object.values(assets).map(loadImage)).then(images => {
+  // create a lookup from path -> HTMLImageElement
+  const imgMap = {};
+  Object.keys(assets).forEach((k, i) => imgMap[k] = images[i]);
+
+  // two-pass approach: compute per-body 'cover' scale first, then normalize upperArm to lowerArm average
+  const bodyScaleMap = new Map();
+  const keyScaleLists = {};
+
+    // tweak: make upper arms a bit smaller than lower arms for better visual proportion
+    const UPPER_ARM_SCALE_MULTIPLIER = 0.8;
+
+  // first pass: compute scales and assign textures
+  for (const [body, key] of bodyAssetMap.entries()) {
+    const img = imgMap[key];
+    if (!img) continue;
+
+    body.render.sprite = body.render.sprite || {};
+    body.render.sprite.texture = assets[key];
+
+    const bodyW = body.bounds.max.x - body.bounds.min.x;
+    const bodyH = body.bounds.max.y - body.bounds.min.y;
+    const scaleX = bodyW / img.width;
+    const scaleY = bodyH / img.height;
+    const scale = Math.max(scaleX, scaleY);
+
+    bodyScaleMap.set(body, scale);
+    keyScaleLists[key] = keyScaleLists[key] || [];
+    keyScaleLists[key].push(scale);
+  }
+
+  // compute average scale for lower arms (if available)
+  let desiredLowerScale = null;
+  if (keyScaleLists['lowerArm'] && keyScaleLists['lowerArm'].length) {
+    const arr = keyScaleLists['lowerArm'];
+    desiredLowerScale = arr.reduce((a, b) => a + b, 0) / arr.length;
+  }
+
+  // second pass: apply scales, forcing upperArm to match lowerArm average when possible
+  for (const [body, key] of bodyAssetMap.entries()) {
+    const img = imgMap[key];
+    if (!img) continue;
+
+    const origScale = bodyScaleMap.get(body) || 1;
+  const useScale = (key === 'upperArm' && desiredLowerScale) ? (desiredLowerScale * UPPER_ARM_SCALE_MULTIPLIER) : origScale;
+
+    body.render.sprite.xScale = useScale;
+    body.render.sprite.yScale = useScale;
+    body.render.visible = true;
+  }
+}).catch(err => {
+  console.warn('Failed to load ragdoll images, falling back to rectangle rendering.', err);
+});
 
 // Add all bodies
 World.add(world, [
@@ -198,9 +293,10 @@ function connect(a, b, options = {}) {
 World.add(world, [
   // Left arm joints
   connect(torso, upperArmLeft, {
-    pointA: { x: -TORSO_W / 2 + 5, y: -30 }, 
-    pointB: { x: 0, y: -LIMB_H / 2 + 10 },
-    stiffness: 0.6
+    // attach at the outer edge of the torso so the arm connects at the seam
+    pointA: { x: -TORSO_W / 2, y: -TORSO_H / 2 + 10 },
+    pointB: { x: 0, y: -LIMB_H / 2 },
+    stiffness: 0.3
   }),
   connect(upperArmLeft, lowerArmLeft, {
     pointA: { x: 0, y: LIMB_H / 2 },
@@ -210,9 +306,9 @@ World.add(world, [
 
   // Right arm joints
   connect(torso, upperArmRight, {
-    pointA: { x: TORSO_W / 2 - 5, y: -30 },
-    pointB: { x: 0, y: -LIMB_H / 2 + 10 },
-    stiffness: 0.6
+    pointA: { x: TORSO_W / 2, y: -TORSO_H / 2 + 10 },
+    pointB: { x: 0, y: -LIMB_H / 2 },
+    stiffness: 0.3
   }),
   connect(upperArmRight, lowerArmRight, {
     pointA: { x: 0, y: LIMB_H / 2 },
